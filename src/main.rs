@@ -1,7 +1,10 @@
+mod home_dir;
+
 use chrono::Datelike;
 use chrono::Local;
 use chrono::TimeDelta;
 use chrono::TimeZone;
+use home_dir::get_home_dir;
 use std::fmt::Write;
 use std::{fs::File, io::BufReader};
 
@@ -72,7 +75,10 @@ fn main() {
     args.next();
 
     // let ins_now = std::time::Instant::now();
-    let buf = BufReader::new(File::open("./cal.ics").unwrap());
+
+    let home_dir = get_home_dir().unwrap();
+    let cal_path = home_dir.join("./cal.ics");
+    let buf = BufReader::new(File::open(cal_path).unwrap());
 
     let mut reader = ical::IcalParser::new(buf);
 
