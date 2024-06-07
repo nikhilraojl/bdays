@@ -24,7 +24,7 @@ impl std::error::Error for Error {}
 
 type Result<T> = std::result::Result<T, Error>;
 
-pub fn get_home_dir() -> Result<PathBuf> {
+pub fn get() -> Result<PathBuf> {
     match OS {
         "windows" => Ok(PathBuf::from(std::env::var("userprofile")?)),
         "linux" => Ok(PathBuf::from(std::env::var("HOME")?)),

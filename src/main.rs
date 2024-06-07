@@ -4,22 +4,23 @@ use chrono::Datelike;
 use chrono::Local;
 use chrono::TimeDelta;
 use chrono::TimeZone;
-use home_dir::get_home_dir;
+use home_dir::get;
 use std::fmt::Write;
+use std::path::PathBuf;
 use std::{fs::File, io::BufReader};
 
 #[derive(Debug)]
 enum Rrule {
     Yearly(YearlyRule),
+    // TODO: add Weekly
     // Weekly(WeeklyRule),
 }
 
 impl Rrule {
     fn from_outlook_event(rule: &str) -> Option<Self> {
-        // TODO: directly indexing into vec may blow up
         let rule_split = rule.split(';').collect::<Vec<&str>>();
         let freq_value = rule_split[0].split('=').collect::<Vec<&str>>();
-        match freq_value[1] {
+        match *freq_value.get(1).unwrap() {
             "YEARLY" => {
                 let by_month_day = rule_split[1].split('=').collect::<Vec<&str>>()[1]
                     .parse()
@@ -27,12 +28,12 @@ impl Rrule {
                 let by_month = rule_split[2].split('=').collect::<Vec<&str>>()[1]
                     .parse()
                     .unwrap();
-                // println!("{by_month_day:?}, {by_month:?}");
                 Some(Self::Yearly(YearlyRule {
                     by_month_day,
                     by_month,
                 }))
             }
+            // TODO: add Weekly
             // "WEEKLY" => {
             //     let count = rule_split[1].split('=').collect::<Vec<&str>>()[1]
             //         .parse()
@@ -73,11 +74,19 @@ fn main() {
     let mut args = std::env::args();
     // skip current program path
     args.next();
+    let ins_now = std::time::Instant::now();
 
-    // let ins_now = std::time::Instant::now();
+    if let Some(_arg) = args.next() {
+        eprintln!("No arguments accepted!");
+    } else {
+        let home_dir = get().unwrap();
+        let cal_path = home_dir.join("./cal.ics");
+        find_birthdays(&parse_calendar(cal_path));
+    }
+    println!("{}", ins_now.elapsed().as_millis());
+}
 
-    let home_dir = get_home_dir().unwrap();
-    let cal_path = home_dir.join("./cal.ics");
+fn parse_calendar(cal_path: PathBuf) -> Vec<Event> {
     let buf = BufReader::new(File::open(cal_path).unwrap());
 
     let mut reader = ical::IcalParser::new(buf);
@@ -99,27 +108,16 @@ fn main() {
         }
         events.push(e);
     }
-    if let Some(_arg) = args.next() {
-        eprintln!("No arguments needed!");
-        return;
-    } else {
-        find_birthdays(&events)
-    }
-
-    // println!("{}", ins_now.elapsed().as_millis());
+    return events;
 }
 
 fn find_birthdays(events: &Vec<Event>) {
     let now = Local::now();
     let curr_day = now.day();
     let curr_month = now.month();
-    // let curr_day = 2;
-    // let curr_month = 6;
-
-    // let mut output_today = String::new();
-    let mut output_today: Vec<&str> = Vec::new();
 
     let until_date = now + TimeDelta::days(7);
+    let mut output_today: Vec<&str> = Vec::new();
     let mut output_7days: Vec<(i64, &str)> = Vec::new();
 
     for event in events {
@@ -135,45 +133,50 @@ fn find_birthdays(events: &Vec<Event>) {
                 let e_name = event.summary.as_ref().unwrap();
                 let in_days = e_date - now;
                 output_7days.push((in_days.num_days(), e_name));
-                // let output_str = format!("{} {}", in_days.num_days(), e_name);
-                // output_buf.push_str(&output_str);
-                // output_buf.push('\n');
             }
         }
     }
 
-    if output_today.is_empty() {
-        println!("No brithdays today");
+    let mut max_event_length = 5;
+    let mut output_buf = String::new();
+
+    let mut body_buf_today = String::new();
+    for event in &output_today {
+        if event.len() > max_event_length {
+            max_event_length = event.len();
+        }
+        body_buf_today.push_str(&format!("> {event}"));
+        body_buf_today.push('\n');
+    }
+
+    output_7days.sort_by(|a, b| a.0.cmp(&b.0));
+    let mut body_buf_7days = String::new();
+    for event in output_7days {
+        if event.1.len() > max_event_length {
+            max_event_length = event.1.len();
+        }
+        body_buf_7days.push_str(&format!("{:>2} days | {} ", event.0, event.1));
+        body_buf_7days.push('\n');
+    }
+
+    //////////////////////////////////////////////////////////////////
+    // output for `today`
+    //////////////////////////////////////////////////////////////////
+    writeln!(output_buf, "-----").unwrap();
+    writeln!(output_buf, "TODAY").unwrap();
+    writeln!(output_buf, "-----").unwrap();
+    if body_buf_today.is_empty() {
+        writeln!(output_buf, "No birthdays today\n").unwrap();
     } else {
-        let mut max_event_length = 5;
-        let mut output_buf = String::new();
+        writeln!(output_buf, "{body_buf_today}").unwrap();
+    }
 
-        let mut body_buf_today = String::new();
-        // writeln!(output_buf, "TODAY");
-        // writeln!(output_buf, "-----");
-        for e in &output_today {
-            if e.len() > max_event_length {
-                max_event_length = e.len();
-            }
-            body_buf_today.push_str(&format!("> {}", e));
-            body_buf_today.push('\n');
-        }
-
-        output_7days.sort_by(|a, b| a.0.cmp(&b.0));
-        let mut body_buf_7days = String::new();
-        for e in output_7days {
-            if e.1.len() > max_event_length {
-                max_event_length = e.1.len();
-            }
-            body_buf_7days.push_str(&format!("{:>2} days | {} ", e.0, e.1));
-            body_buf_7days.push('\n');
-        }
-
-        writeln!(output_buf, "-----").unwrap();
-        writeln!(output_buf, "TODAY").unwrap();
-        writeln!(output_buf, "-----").unwrap();
-        writeln!(output_buf, "{}", body_buf_today).unwrap();
-
+    //////////////////////////////////////////////////////////////////
+    // output for `in 7 days`
+    //////////////////////////////////////////////////////////////////
+    if body_buf_7days.is_empty() {
+        writeln!(output_buf, "No birthdays in 7 days").unwrap();
+    } else {
         writeln!(
             output_buf,
             "{}-+-{}",
@@ -195,7 +198,7 @@ fn find_birthdays(events: &Vec<Event>) {
             "-".repeat(max_event_length)
         )
         .unwrap();
-        write!(output_buf, "{}", body_buf_7days).unwrap();
+        write!(output_buf, "{body_buf_7days}").unwrap();
         writeln!(
             output_buf,
             "{}-+-{}",
@@ -203,6 +206,6 @@ fn find_birthdays(events: &Vec<Event>) {
             "-".repeat(max_event_length)
         )
         .unwrap();
-        println!("{}", output_buf);
     }
+    println!("{output_buf}");
 }
