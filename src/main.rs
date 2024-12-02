@@ -132,29 +132,33 @@ fn find_birthdays(events: &Vec<Event>) -> Result<()> {
     let now = Local::now();
     let curr_day = now.day();
     let curr_month = now.month();
+    let until_tomorrow = now + TimeDelta::days(1);
     let until_date = now + TimeDelta::days(7);
 
     let mut output_today: Vec<&str> = Vec::new();
+    let mut output_tomorrow: Vec<&str> = Vec::new();
     let mut output_7days: Vec<(i64, &str)> = Vec::new();
 
     for event in events {
         if let Some(Rrule::Yearly(y_rrule)) = &event.rrule {
-            if y_rrule.by_month == curr_month && y_rrule.by_month_day == curr_day {
-                let e_name = event
-                    .summary
-                    .as_ref()
-                    .ok_or_else(|| Error::IncorrectRrule)?;
-                output_today.push(e_name);
-            }
+            let e_name = event
+                .summary
+                .as_ref()
+                .ok_or_else(|| Error::IncorrectRrule)?;
             let e_date = Local
                 .with_ymd_and_hms(now.year(), y_rrule.by_month, y_rrule.by_month_day, 0, 0, 0)
                 .single()
                 .ok_or_else(|| Error::IncorrectRrule)?;
-            if now < e_date && e_date < until_date {
-                let e_name = event
-                    .summary
-                    .as_ref()
-                    .ok_or_else(|| Error::IncorrectRrule)?;
+
+            if y_rrule.by_month == curr_month && y_rrule.by_month_day == curr_day {
+                output_today.push(e_name);
+            }
+
+            if now < e_date && e_date < until_tomorrow {
+                output_tomorrow.push(e_name);
+            }
+
+            if until_tomorrow < e_date && e_date < until_date {
                 let in_days = e_date - now;
                 output_7days.push((in_days.num_days(), e_name));
             }
@@ -172,6 +176,15 @@ fn find_birthdays(events: &Vec<Event>) -> Result<()> {
         body_buf_today.push_str(&format!("> {event}"));
         body_buf_today.push('\n');
     }
+    
+    let mut body_buf_tomorrow = String::new();
+    for event in &output_tomorrow {
+        if event.len() > max_event_length {
+            max_event_length = event.len();
+        }
+        body_buf_tomorrow.push_str(&format!("> {event}"));
+        body_buf_tomorrow.push('\n');
+    }
 
     let mut body_buf_7days = String::new();
     output_7days.sort_by(|a, b| a.0.cmp(&b.0));
@@ -179,7 +192,11 @@ fn find_birthdays(events: &Vec<Event>) -> Result<()> {
         if event.1.len() > max_event_length {
             max_event_length = event.1.len();
         }
-        body_buf_7days.push_str(&format!("{:>2} days | {} ", event.0, event.1));
+        if event.0 == 1 {
+            body_buf_7days.push_str(&format!("{:>2} day  | {} ", event.0, event.1));
+        } else {
+            body_buf_7days.push_str(&format!("{:>2} days | {} ", event.0, event.1));
+        }
         body_buf_7days.push('\n');
     }
 
@@ -194,6 +211,18 @@ fn find_birthdays(events: &Vec<Event>) -> Result<()> {
     } else {
         writeln!(output_buf, "{body_buf_today}")?;
     }
+    
+    //////////////////////////////////////////////////////////////////
+    // output for `tomorrow`
+    //////////////////////////////////////////////////////////////////
+    writeln!(output_buf, "--------")?;
+    writeln!(output_buf, "TOMORROW")?;
+    writeln!(output_buf, "--------")?;
+    if body_buf_tomorrow.is_empty() {
+        writeln!(output_buf, "No birthdays tomorrow\n")?;
+    } else {
+        writeln!(output_buf, "{body_buf_tomorrow}")?;
+    }
 
     //////////////////////////////////////////////////////////////////
     // output for `in 7 days`
@@ -201,31 +230,16 @@ fn find_birthdays(events: &Vec<Event>) -> Result<()> {
     if body_buf_7days.is_empty() {
         writeln!(output_buf, "No birthdays in 7 days")?;
     } else {
-        writeln!(
-            output_buf,
-            "{}-+-{}",
-            "-".repeat(7),
-            "-".repeat(max_event_length)
-        )?;
-        writeln!(
-            output_buf,
-            "{:<7} | {}",
-            " In",
-            " ".repeat(max_event_length)
-        )?;
-        writeln!(
-            output_buf,
-            "{}-+-{}",
-            "-".repeat(7),
-            "-".repeat(max_event_length)
-        )?;
+        writeln!(output_buf, "--------")?;
+        writeln!(output_buf, "UPCOMING")?;
+        writeln!(output_buf, "--------")?;
         write!(output_buf, "{body_buf_7days}")?;
-        writeln!(
-            output_buf,
-            "{}-+-{}",
-            "-".repeat(7),
-            "-".repeat(max_event_length)
-        )?;
+        // writeln!(
+        //     output_buf,
+        //     "{}-+-{}",
+        //     "-".repeat(7),
+        //     "-".repeat(max_event_length)
+        // )?;
     }
     println!("{output_buf}");
     Ok(())

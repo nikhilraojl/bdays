@@ -9,15 +9,20 @@ TODAY
 -----
 > AOE's Birthday
 
---------+---------------------------------
- In     |
---------+---------------------------------
- 2 days | Dave's Birthday
+--------
+TOMORROW
+--------
+> Definitive Edition's Birthday
+
+--------
+UPCOMING
+--------
+ 1 day  | Dave's Birthday
  2 days | T90 official's Birthday
  2 days | Memb's Birthday
  3 days | Daniela's Birthday
  6 days | Lidakor's Birthday
---------+---------------------------------
+
 ```
 
 ## Usage:

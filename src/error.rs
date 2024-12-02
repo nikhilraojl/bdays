@@ -12,7 +12,7 @@ pub enum Error {
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::EnvVarError(_) => write!(f, "No Home Dir found"),
+            Self::EnvVarError(e) => write!(f, "No Home Dir found, {e}"),
             Self::IoError(e) => write!(f, "{e}"),
             Self::FmtError(e) => write!(f, "{e}"),
             Self::ParseError(e) => write!(f, "{e}"),
