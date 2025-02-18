@@ -17,11 +17,11 @@ TOMORROW
 --------
 UPCOMING
 --------
- 1 day  | Dave's Birthday
- 2 days | T90 official's Birthday
- 2 days | Memb's Birthday
- 3 days | Daniela's Birthday
- 6 days | Lidakor's Birthday
+ 1 day  | Sat 22/02 | Dave's Birthday
+ 2 days | Sat 23/02 | T90 official's Birthday
+ 2 days | Sat 23/02 | Memb's Birthday
+ 3 days | Sat 24/02 | Daniela's Birthday
+ 6 days | Sat 27/02 | Lidakor's Birthday
 
 ```
 

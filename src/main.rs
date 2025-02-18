@@ -4,6 +4,7 @@ use chrono::Datelike;
 use chrono::Local;
 use chrono::TimeDelta;
 use chrono::TimeZone;
+use chrono::Weekday;
 use error::{Error, Result};
 use std::fmt::Write;
 use std::{env::consts::OS, path::PathBuf};
@@ -109,7 +110,7 @@ fn parse_calendar(cal_path: PathBuf) -> Result<Vec<Event>> {
 
     let buf = BufReader::new(File::open(cal_path)?);
     let mut reader = ical::IcalParser::new(buf);
-    let line = reader.next().ok_or_else(|| Error::IterError)??;
+    let line = reader.next().ok_or(Error::IterError)??;
 
     for ical_event in line.events {
         let mut event = Event::default();
@@ -137,18 +138,18 @@ fn find_birthdays(events: &Vec<Event>) -> Result<()> {
 
     let mut output_today: Vec<&str> = Vec::new();
     let mut output_tomorrow: Vec<&str> = Vec::new();
-    let mut output_7days: Vec<(i64, &str)> = Vec::new();
+    let mut output_7days: Vec<(i64, Weekday, String, &str)> = Vec::new();
 
     for event in events {
         if let Some(Rrule::Yearly(y_rrule)) = &event.rrule {
             let e_name = event
                 .summary
                 .as_ref()
-                .ok_or_else(|| Error::IncorrectRrule)?;
+                .ok_or(Error::IncorrectRrule)?;
             let e_date = Local
                 .with_ymd_and_hms(now.year(), y_rrule.by_month, y_rrule.by_month_day, 0, 0, 0)
                 .single()
-                .ok_or_else(|| Error::IncorrectRrule)?;
+                .ok_or(Error::IncorrectRrule)?;
 
             if y_rrule.by_month == curr_month && y_rrule.by_month_day == curr_day {
                 output_today.push(e_name);
@@ -159,29 +160,28 @@ fn find_birthdays(events: &Vec<Event>) -> Result<()> {
             }
 
             if until_tomorrow < e_date && e_date < until_date {
+                let formatted_e_date = format!("{}", e_date.format("%d/%m"));
                 let in_days = e_date - now;
-                output_7days.push((in_days.num_days(), e_name));
+                output_7days.push((
+                    in_days.num_days(),
+                    e_date.weekday(),
+                    formatted_e_date,
+                    e_name,
+                ));
             }
         }
     }
 
-    let mut max_event_length = 5;
     let mut output_buf = String::new();
 
     let mut body_buf_today = String::new();
     for event in &output_today {
-        if event.len() > max_event_length {
-            max_event_length = event.len();
-        }
         body_buf_today.push_str(&format!("> {event}"));
         body_buf_today.push('\n');
     }
-    
+
     let mut body_buf_tomorrow = String::new();
     for event in &output_tomorrow {
-        if event.len() > max_event_length {
-            max_event_length = event.len();
-        }
         body_buf_tomorrow.push_str(&format!("> {event}"));
         body_buf_tomorrow.push('\n');
     }
@@ -189,13 +189,16 @@ fn find_birthdays(events: &Vec<Event>) -> Result<()> {
     let mut body_buf_7days = String::new();
     output_7days.sort_by(|a, b| a.0.cmp(&b.0));
     for event in output_7days {
-        if event.1.len() > max_event_length {
-            max_event_length = event.1.len();
-        }
         if event.0 == 1 {
-            body_buf_7days.push_str(&format!("{:>2} day  | {} ", event.0, event.1));
+            body_buf_7days.push_str(&format!(
+                "{:>2} day  | {} {} | {}",
+                event.0, event.1, event.2, event.3
+            ));
         } else {
-            body_buf_7days.push_str(&format!("{:>2} days | {} ", event.0, event.1));
+            body_buf_7days.push_str(&format!(
+                "{:>2} days | {} {} | {}",
+                event.0, event.1, event.2, event.3
+            ));
         }
         body_buf_7days.push('\n');
     }
@@ -211,7 +214,7 @@ fn find_birthdays(events: &Vec<Event>) -> Result<()> {
     } else {
         writeln!(output_buf, "{body_buf_today}")?;
     }
-    
+
     //////////////////////////////////////////////////////////////////
     // output for `tomorrow`
     //////////////////////////////////////////////////////////////////
@@ -234,12 +237,6 @@ fn find_birthdays(events: &Vec<Event>) -> Result<()> {
         writeln!(output_buf, "UPCOMING")?;
         writeln!(output_buf, "--------")?;
         write!(output_buf, "{body_buf_7days}")?;
-        // writeln!(
-        //     output_buf,
-        //     "{}-+-{}",
-        //     "-".repeat(7),
-        //     "-".repeat(max_event_length)
-        // )?;
     }
     println!("{output_buf}");
     Ok(())
