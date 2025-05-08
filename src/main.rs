@@ -97,6 +97,7 @@ fn run() -> Result<()> {
         let home_dir = match OS {
             "windows" => Ok(PathBuf::from(std::env::var("userprofile")?)),
             "linux" => Ok(PathBuf::from(std::env::var("HOME")?)),
+            "macos" => Ok(PathBuf::from(std::env::var("HOME")?)),
             _ => Err(Error::UnSupportedOs),
         }?;
         let cal_path = home_dir.join("./cal.ics");
